@@ -43,6 +43,11 @@ on:
         required: false
         default: ""
         type: string
+      install_nix:
+        description: "Install Nix first via DeterminateSystems/nix-installer-action (puts nix on PATH properly, unlike curl|sh)"
+        required: false
+        default: false
+        type: boolean
       build_command:
         description: "Build command(s); omitted for callers that build in a prior job and pass artifacts"
         required: false
@@ -116,6 +121,10 @@ jobs:
           repository: ${{ github.repository }}
           github-token: ${{ github.token }}
           path: artifacts
+
+      - name: Install Nix (Determinate Systems installer)
+        if: inputs.install_nix
+        uses: DeterminateSystems/nix-installer-action@v23
 
       - name: Set up toolchain
         if: inputs.setup_command != '' && inputs.build_shell == 'bash'
