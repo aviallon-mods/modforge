@@ -202,7 +202,9 @@ jobs:
       # downloadable (Actions artifacts expire and need auth; the modforge page
       # links these). One prerelease per repo, assets overwritten each run.
       - name: Refresh the rolling `ci` prerelease
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # push to main (the steady state) OR a manual dispatch on main (so the
+        # channel can be refreshed/tested on demand).
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
