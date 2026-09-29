@@ -74,7 +74,7 @@ on:
         default: ""
         type: string
       download_run_id:
-        description: "Workflow run id to download artifacts from (e.g. github.event.workflow_run.id); artifacts land in artifacts/<name>/, enabling the packaging-layer-over-upstream-CI pattern"
+        description: "Workflow run id to download artifacts from (e.g. github.event.workflow_run.id); artifacts land in artifacts/<name>/, enabling the packaging-layer-over-upstream-CI pattern. NOTE: reusable-workflow permissions are INTERSECTED - the calling job must also grant `actions: read` or the download fails with 'Resource not accessible by integration'."
         required: false
         default: ""
         type: string
