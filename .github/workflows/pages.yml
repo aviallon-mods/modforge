@@ -1,0 +1,49 @@
+name: pages
+
+# Builds the org-wide build index and publishes the modforge page.
+# Runs on push (the page itself changed), on a schedule (release data changes
+# without touching this repo) and on demand.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "site/**"
+      - "mods.toml"
+      - "tools/build_index.py"
+      - ".github/workflows/pages.yml"
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect builds from all aviallon-mods repositories
+        run: python tools/build_index.py --mods mods.toml --out site/index.json
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

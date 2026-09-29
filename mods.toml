@@ -1,0 +1,88 @@
+# Curated metadata for the modforge page. One entry per repository that ships
+# installable builds; tools/build_index.py merges this with live GitHub release data.
+# `game_id` becomes the host segment of the modl:// install link (Amethyst matches it
+# against the game's Nexus domain / internal id; `other` installs into the active game).
+
+[[mods]]
+repo = "HeapSentinel"
+name = "HeapSentinel"
+kind = "mod"
+order = 10
+description = "SKSE memory sentinel that tells you which mod caused a Skyrim memory crash."
+
+[[mods]]
+repo = "FaceGenGuard"
+name = "FaceGenGuard"
+kind = "mod"
+order = 20
+description = "Survives one known RaceMenu face-gen crash instead of dying. Opt-in via SKSE/Plugins/FaceGenGuard.ini."
+
+[[mods]]
+repo = "Push-Physics-FFF"
+name = "Push Physics FFF"
+kind = "mod"
+order = 30
+description = "Physics-based character pushing for Skyrim AE (SKSE plugin)."
+
+[[mods]]
+repo = "Mantella-AE104"
+name = "Mantella (AE 1.7.104)"
+kind = "mod"
+order = 40
+description = "Mantella SKSE plugin DLLs rebuilt for Skyrim AE 1.7.104."
+
+[[mods]]
+repo = "CBPC-1.7.2-concrt-fix"
+name = "CBPC 1.7.2 (concrt fix)"
+kind = "mod"
+order = 50
+description = "CBPC 1.7.2 with the concrt NUMA-topology crash fixed."
+
+[[mods]]
+repo = "Skyrim-A-Pose-Fix"
+name = "Skyrim A-Pose Fix"
+kind = "mod"
+order = 60
+description = "Fixes the permanent A-pose / missing animations failure."
+
+[[mods]]
+repo = "CrosshairRefEventsFix"
+name = "CrosshairRefEventsFix"
+kind = "mod"
+order = 70
+description = "Fixes the bug that continually fires CrosshairRef events."
+
+[[mods]]
+repo = "DeviousDevicesNG"
+name = "Devious Devices NG"
+kind = "mod"
+order = 80
+description = "Devious Devices NG (community fork)."
+
+[[mods]]
+repo = "SexLabpp"
+name = "SexLab++"
+kind = "mod"
+order = 90
+description = "Backend systems for SLP+."
+
+[[mods]]
+repo = "BodySlide-and-Outfit-Studio"
+name = "BodySlide and Outfit Studio"
+kind = "tool"
+order = 100
+game_id = "other"
+description = "Tool to convert, create and customize bodies and outfits."
+
+[[mods]]
+repo = "skyrim-community-shaders"
+name = "Community Shaders"
+kind = "mod"
+order = 110
+description = "Community-driven advanced graphics for Skyrim AE/SE."
+
+[[mods]]
+repo = "SexLabPPrism-re"
+name = "SexLab P+ Prism (RE)"
+kind = "mod"
+order = 120

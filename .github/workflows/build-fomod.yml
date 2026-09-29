@@ -1,0 +1,188 @@
+name: build-fomod
+
+# Shared FOMOD packaging / verification / release pipeline for aviallon-mods.
+#
+# A caller repo keeps its own build steps (toolchains differ wildly: xwin +
+# clang-cl cross-builds, MSBuild, CMake) and delegates everything after the
+# build to this workflow: assemble the installable zip from the repo's
+# `fomod-package.toml`, run the mutation-tested verify gate, upload the
+# artifact, attach it to the tag's release, and keep a rolling `ci`
+# prerelease carrying the newest build for the modforge page.
+#
+#   jobs:
+#     package:
+#       uses: aviallon-mods/modforge/.github/workflows/build-fomod.yml@main
+#       with:
+#         mod_name: FaceGenGuard
+#         setup_command: tools/setup-toolchain.sh
+#         build_command: tools/build.sh
+#
+# Nothing here uploads anything unverified: package_fomod.py assembles the zip
+# from an explicit file list, verify_fomod.py refuses it unless the ModuleConfig
+# resolves to >= 1 plugin and every payload byte matches its build input.
+
+on:
+  workflow_call:
+    inputs:
+      mod_name:
+        description: "Mod name (artifact + release asset naming, e.g. FaceGenGuard)"
+        required: true
+        type: string
+      package_specs:
+        description: "fomod-package.toml spec paths, one per zip (newline-separated)"
+        required: false
+        default: "fomod-package.toml"
+        type: string
+      submodules:
+        description: "Checkout submodules recursively (CommonLibSSE-NG etc.)"
+        required: false
+        default: true
+        type: boolean
+      setup_command:
+        description: "Optional toolchain setup command (bash)"
+        required: false
+        default: ""
+        type: string
+      build_command:
+        description: "Build command(s); omitted for callers that build in a prior job and pass artifacts"
+        required: false
+        default: ""
+        type: string
+      build_shell:
+        description: "Shell for setup_command/build_command (bash or pwsh)"
+        required: false
+        default: "bash"
+        type: string
+      runs_on:
+        description: "Runner label"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      cache_paths:
+        description: "Multiline cache paths (empty disables the cache step)"
+        required: false
+        default: ""
+        type: string
+      cache_key:
+        description: "actions/cache key (with the cache_paths input)"
+        required: false
+        default: ""
+        type: string
+      extra_artifact:
+        description: "Optional glob of extra build outputs to upload raw (e.g. the bare DLL)"
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  package:
+    name: package + verify + release
+    runs-on: ${{ inputs.runs_on }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
+
+      - name: Checkout modforge tooling
+        uses: actions/checkout@v4
+        with:
+          repository: aviallon-mods/modforge
+          path: _modforge
+
+      - name: Cache toolchain
+        if: inputs.cache_paths != ''
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.cache_paths }}
+          key: ${{ inputs.cache_key }}
+
+      - name: Set up toolchain
+        if: inputs.setup_command != ''
+        shell: ${{ inputs.build_shell }}
+        run: ${{ inputs.setup_command }}
+
+      - name: Build
+        if: inputs.build_command != ''
+        shell: ${{ inputs.build_shell }}
+        run: ${{ inputs.build_command }}
+
+      - name: Package the FOMOD zip(s)
+        shell: bash
+        env:
+          SPECS: ${{ inputs.package_specs }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r spec; do
+            [ -n "$spec" ] && args+=(--spec "$spec")
+          done <<< "$SPECS"
+          python _modforge/tools/package_fomod.py "${args[@]}" --out dist
+
+      - name: Verify the FOMOD package(s) (gate)
+        shell: bash
+        env:
+          SPECS: ${{ inputs.package_specs }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob globstar
+          args=()
+          while IFS= read -r spec; do
+            [ -n "$spec" ] && args+=(--spec "$spec")
+          done <<< "$SPECS"
+          zips=(dist/*.zip)
+          if [ "${#zips[@]}" -ne "${#args[@]}" ]; then
+            echo "::error::${#args[@]} spec(s) but ${#zips[@]} zip(s) in dist/: ${zips[*]:-none}"
+            exit 1
+          fi
+          python _modforge/tools/verify_fomod.py "${args[@]}" "${zips[@]}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.mod_name }}-FOMOD
+          path: dist/*.zip
+          if-no-files-found: error
+
+      - name: Upload extra build outputs
+        if: inputs.extra_artifact != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.mod_name }}
+          path: ${{ inputs.extra_artifact }}
+          if-no-files-found: warn
+
+      - name: Attach the FOMOD zip to the tag's release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+
+      # Rolling `ci` prerelease: the newest verified build of main, publicly
+      # downloadable (Actions artifacts expire and need auth; the modforge page
+      # links these). One prerelease per repo, assets overwritten each run.
+      - name: Refresh the rolling `ci` prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MOD_NAME: ${{ inputs.mod_name }}
+        run: |
+          set -euo pipefail
+          zip=$(ls dist/*.zip)
+          if ! gh release view ci --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create ci --repo "$GITHUB_REPOSITORY" --prerelease \
+              --title "$MOD_NAME CI builds" \
+              --notes "Rolling prerelease: newest verified build of \`main\`. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+              "$zip"
+            echo "created rolling prerelease 'ci' with $(basename "$zip")"
+            exit 0
+          fi
+          # Drop stale assets so the prerelease carries exactly the newest build.
+          for asset in $(gh release view ci --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name'); do
+            gh release delete-asset ci "$asset" --repo "$GITHUB_REPOSITORY" --yes || true
+          done
+          gh release upload ci "$zip" --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit ci --repo "$GITHUB_REPOSITORY" --prerelease \
+            --notes "Rolling prerelease: newest verified build of \`main\`. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          echo "rolling prerelease 'ci' now carries $(basename "$zip")"

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>modforge — aviallon-mods builds</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>modforge</h1>
+    <p class="tagline">Installable builds for every <a href="https://github.com/aviallon-mods">aviallon-mods</a>
+      repository — click a build to install it straight into Amethyst.</p>
+    <label class="toggle">
+      <input type="checkbox" id="show-prereleases">
+      Show non-release builds
+    </label>
+  </header>
+
+  <main id="mod-list" aria-live="polite">
+    <p class="loading">Loading build index…</p>
+  </main>
+
+  <footer>
+    <p id="index-stamp"></p>
+    <p>Install buttons use the <code>modl://</code> protocol (Amethyst Mod Manager).
+       Each build also has a plain download link for manual installation.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
