@@ -86,3 +86,11 @@ repo = "SexLabPPrism-re"
 name = "SexLab P+ Prism (RE)"
 kind = "mod"
 order = 120
+
+[[mods]]
+repo = "Tullius_ctd_loger"
+name = "Tullius CTD Logger"
+kind = "mod"
+order = 130
+game_id = "skyrimspecialedition"
+description = "CTD / freeze / infinite-loading-screen diagnostics: captures dumps and produces a readable report (summary + evidence + checklist)."
