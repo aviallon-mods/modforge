@@ -73,6 +73,11 @@ on:
         required: false
         default: ""
         type: string
+      download_run_id:
+        description: "Workflow run id to download artifacts from (e.g. github.event.workflow_run.id); artifacts land in artifacts/<name>/, enabling the packaging-layer-over-upstream-CI pattern"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   package:
@@ -97,6 +102,15 @@ jobs:
         with:
           path: ${{ inputs.cache_paths }}
           key: ${{ inputs.cache_key }}
+
+      - name: Download build artifacts from another run
+        if: inputs.download_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.download_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: artifacts
 
       - name: Set up toolchain
         if: inputs.setup_command != ''
