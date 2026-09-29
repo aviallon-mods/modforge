@@ -169,7 +169,12 @@ def build_one(spec_path: Path, outdir: Path) -> int:
         src, dest = root / item["src"], item["dest"]
         if not src.is_file():
             fail(f"missing build input: {item['src']}")
-        if not re.fullmatch(r"[A-Za-z0-9._\-/]+", dest) or ".." in dest.split("/"):
+        # Spaces are legitimate in mod filenames ('Devious Devices - Assets.esm',
+        # 'res/Maya FBX Skyrim Fix.txt'); reject only genuinely hostile shapes:
+        # absolute paths, backslashes, '..' segments, control chars.
+        if (not dest or dest.startswith("/") or "\\" in dest or ".." in dest.split("/")
+                or any(ord(c) < 32 or ord(c) == 127 for c in dest)
+                or not re.fullmatch(r"[\w.\- /]+", dest)):
             fail(f"hostile archive path: {dest!r}")
         entries.append((str(src), dest))
 

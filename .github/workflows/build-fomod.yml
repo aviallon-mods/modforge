@@ -85,6 +85,11 @@ jobs:
     runs-on: ${{ inputs.runs_on }}
     permissions:
       contents: write
+      # actions:read is for actions/download-artifact with download_run_id:
+      # passing github-token routes it through the REST artifact API, which the
+      # default token cannot read without this grant (observed failure mode:
+      # 'Resource not accessible by integration').
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -193,20 +198,21 @@ jobs:
           MOD_NAME: ${{ inputs.mod_name }}
         run: |
           set -euo pipefail
-          zip=$(ls dist/*.zip)
+          shopt -s nullglob
+          zips=(dist/*.zip)
           if ! gh release view ci --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create ci --repo "$GITHUB_REPOSITORY" --prerelease \
               --title "$MOD_NAME CI builds" \
               --notes "Rolling prerelease: newest verified build of \`main\`. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-              "$zip"
-            echo "created rolling prerelease 'ci' with $(basename "$zip")"
+              "${zips[@]}"
+            echo "created rolling prerelease 'ci' with: ${zips[*]##*/}"
             exit 0
           fi
           # Drop stale assets so the prerelease carries exactly the newest build.
           for asset in $(gh release view ci --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name'); do
             gh release delete-asset ci "$asset" --repo "$GITHUB_REPOSITORY" --yes || true
           done
-          gh release upload ci "$zip" --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload ci "${zips[@]}" --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit ci --repo "$GITHUB_REPOSITORY" --prerelease \
             --notes "Rolling prerelease: newest verified build of \`main\`. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          echo "rolling prerelease 'ci' now carries $(basename "$zip")"
+          echo "rolling prerelease 'ci' now carries: ${zips[*]##*/}"
