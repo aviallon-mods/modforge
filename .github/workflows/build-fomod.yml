@@ -157,12 +157,13 @@ jobs:
           set -euo pipefail
           shopt -s nullglob globstar
           args=()
+          n=0
           while IFS= read -r spec; do
-            [ -n "$spec" ] && args+=(--spec "$spec")
+            if [ -n "$spec" ]; then args+=(--spec "$spec"); n=$((n+1)); fi
           done <<< "$SPECS"
           zips=(dist/*.zip)
-          if [ "${#zips[@]}" -ne "${#args[@]}" ]; then
-            echo "::error::${#args[@]} spec(s) but ${#zips[@]} zip(s) in dist/: ${zips[*]:-none}"
+          if [ "${#zips[@]}" -ne "$n" ]; then
+            echo "::error::$n spec(s) but ${#zips[@]} zip(s) in dist/: ${zips[*]:-none}"
             exit 1
           fi
           python _modforge/tools/verify_fomod.py "${args[@]}" "${zips[@]}"
