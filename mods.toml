@@ -99,6 +99,14 @@ kind = "mod"
 order = 120
 
 [[mods]]
+repo = "Tullius_ctd_loger-upstream-fork"
+skip = true
+
+[[mods]]
+repo = "modforge"
+skip = true
+
+[[mods]]
 repo = "Tullius_ctd_loger"
 name = "Tullius CTD Logger"
 kind = "mod"

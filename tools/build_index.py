@@ -95,6 +95,9 @@ def main() -> int:
     mods = []
     for repo_meta in sorted(org_repos, key=lambda r: r["name"]):
         name = repo_meta["name"]
+        if by_repo.get(name, {}).get("skip"):
+            print(f"::notice::{name}: skip = true in mods.toml - not shown")
+            continue
         # Private repositories ARE listed (the owner visits the page logged in
         # to GitHub, where their release-asset URLs work; strangers get 404s),
         # but flagged `private: true` so the page can say so out loud. Listing
