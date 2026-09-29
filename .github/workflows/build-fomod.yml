@@ -113,13 +113,23 @@ jobs:
           path: artifacts
 
       - name: Set up toolchain
-        if: inputs.setup_command != ''
-        shell: ${{ inputs.build_shell }}
+        if: inputs.setup_command != '' && inputs.build_shell == 'bash'
+        shell: bash
+        run: ${{ inputs.setup_command }}
+
+      - name: Set up toolchain (pwsh)
+        if: inputs.setup_command != '' && inputs.build_shell == 'pwsh'
+        shell: pwsh
         run: ${{ inputs.setup_command }}
 
       - name: Build
-        if: inputs.build_command != ''
-        shell: ${{ inputs.build_shell }}
+        if: inputs.build_command != '' && inputs.build_shell == 'bash'
+        shell: bash
+        run: ${{ inputs.build_command }}
+
+      - name: Build (pwsh)
+        if: inputs.build_command != '' && inputs.build_shell == 'pwsh'
+        shell: pwsh
         run: ${{ inputs.build_command }}
 
       - name: Package the FOMOD zip(s)
