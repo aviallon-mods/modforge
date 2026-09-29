@@ -32,6 +32,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Collect builds from all aviallon-mods repositories
+        env:
+          # ORG_READ_TOKEN (optional secret: fine-grained PAT with Contents:read
+          # on aviallon-mods) lets the collector SEE private repos. The default
+          # GITHUB_TOKEN cannot read sibling private repositories, so without it
+          # private mods come only from curated [[mods.builds]] in mods.toml.
+          GITHUB_TOKEN: ${{ secrets.ORG_READ_TOKEN || github.token }}
         run: python tools/build_index.py --mods mods.toml --out site/index.json
 
       - uses: actions/upload-pages-artifact@v3

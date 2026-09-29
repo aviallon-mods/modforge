@@ -38,6 +38,17 @@ kind = "mod"
 order = 50
 description = "CBPC 1.7.2 with the concrt NUMA-topology crash fixed."
 
+# Private repository (the upstream licence forbids redistribution): the
+# collector cannot see it without the ORG_READ_TOKEN secret, so its build is
+# pinned here by hand. [[mods.builds]] entries are merged with API data.
+[[mods.builds]]
+tag = "v1.7.2-concrt-fix"
+prerelease = false
+published_at = "2026-09-22T17:01:54Z"
+asset_name = "CBPC-1.7.2-concrt-fix.zip"
+asset_size = 388103
+asset_url = "https://github.com/aviallon-mods/CBPC-1.7.2-concrt-fix/releases/download/v1.7.2-concrt-fix/CBPC-1.7.2-concrt-fix.zip"
+
 [[mods]]
 repo = "Skyrim-A-Pose-Fix"
 name = "Skyrim A-Pose Fix"

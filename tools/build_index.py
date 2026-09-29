@@ -72,25 +72,38 @@ def main() -> int:
     for name in sorted(set(by_repo) - known):
         try:
             repo_meta, _ = gh(f"/repos/{args.org}/{name}", token)
-            if repo_meta.get("private"):
-                print(f"::notice::{name}: private repository - omitted from the public index")
-                continue
             org_repos.append(repo_meta)
             known.add(name)
             print(f"::notice::{name}: absent from the org listing, fetched directly")
         except Exception as e:
-            print(f"::warning::mods.toml lists repo {name} but it cannot be fetched: {e}")
+            cur = by_repo[name]
+            if cur.get("builds"):
+                # Curated builds exist: render the card from them rather than
+                # dropping the mod (private repo + token-less run).
+                org_repos.append({
+                    "name": name,
+                    "description": cur.get("description", ""),
+                    "html_url": f"https://github.com/{args.org}/{name}",
+                    "private": True,
+                    "archived": False,
+                })
+                print(f"::notice::{name}: not fetchable ({e.__class__.__name__}) - "
+                      f"showing {len(cur['builds'])} curated build(s)")
+            else:
+                print(f"::warning::mods.toml lists repo {name} but it cannot be fetched: {e}")
 
     mods = []
     for repo_meta in sorted(org_repos, key=lambda r: r["name"]):
         name = repo_meta["name"]
-        # Private repositories are omitted from the PUBLIC index: their asset
-        # URLs 404 for visitors, and some forks are private precisely because
-        # the upstream licence forbids redistribution (e.g. CBPC). Leaking
-        # their names/links on a public page is both broken and a licence risk.
-        if repo_meta.get("private"):
-            print(f"::notice::{name}: private repository - omitted from the public index")
-            continue
+        # Private repositories ARE listed (the owner visits the page logged in
+        # to GitHub, where their release-asset URLs work; strangers get 404s),
+        # but flagged `private: true` so the page can say so out loud. Listing
+        # a private fork's NAME is not redistribution; serving its files
+        # anonymously would be - these links are login-gated by GitHub itself.
+        # Seeing private repos at all needs a token with org access (the
+        # workflow's GITHUB_TOKEN cannot read sibling private repos): set the
+        # ORG_READ_TOKEN secret. Without it, private builds come only from
+        # curated [[mods.builds]] entries in mods.toml.
         cur = by_repo.get(name, {})
         builds = []
         try:
@@ -115,6 +128,26 @@ def main() -> int:
                 "notes_url": rel.get("html_url") or "",
                 "assets": assets,
             })
+        # Curated builds (mods.toml): the honest fallback for private repos a
+        # token-less run cannot see, and pins a page editor can maintain by
+        # hand. Merged, deduped by (tag, asset name); API data wins on clashes.
+        seen = {(b["tag"], a["name"]) for b in builds for a in b["assets"]}
+        for cb in cur.get("builds", []) or []:
+            key = (cb["tag"], cb.get("asset_name", ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            builds.append({
+                "tag": cb["tag"],
+                "prerelease": bool(cb.get("prerelease", False)),
+                "published_at": cb.get("published_at", ""),
+                "notes_url": cb.get("notes_url", ""),
+                "assets": [{
+                    "name": cb["asset_name"],
+                    "size": int(cb.get("asset_size", 0)),
+                    "url": cb["asset_url"],
+                }],
+            })
         builds.sort(key=lambda b: b["published_at"], reverse=True)
         mods.append({
             "repo": name,
@@ -125,6 +158,7 @@ def main() -> int:
             "order": cur.get("order", 100),
             "homepage": repo_meta.get("html_url") or f"https://github.com/{args.org}/{name}",
             "archived": bool(repo_meta.get("archived")),
+            "private": bool(repo_meta.get("private")),
             "builds": builds,
         })
 

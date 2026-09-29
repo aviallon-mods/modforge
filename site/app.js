@@ -55,13 +55,14 @@ function el(tag, className, text) {
 function buildRow(mod, build) {
   const asset = preferredAsset(build);
   const row = el("div", "build-row");
+  const loginNote = mod.private ? " (private asset: GitHub login required)" : "";
   if (!asset) {
     row.appendChild(el("span", "build-label", `${build.tag} (no assets)`));
     return row;
   }
   const label = el("a", "build-label");
   label.href = modlUrl(mod.game_id, asset.url);
-  label.title = `Install ${asset.name} via Amethyst`;
+  label.title = `Install ${asset.name} via Amethyst${loginNote}`;
   label.textContent = build.tag;
   if (build.prerelease) label.appendChild(el("span", "badge", "CI"));
   const meta = el("span", "build-meta", fmtDate(build.published_at));
@@ -69,7 +70,7 @@ function buildRow(mod, build) {
   dl.href = asset.url;
   dl.target = "_blank";
   dl.rel = "noopener";
-  dl.title = `Download ${asset.name} (${(asset.size / 1048576).toFixed(1)} MB)`;
+  dl.title = `Download ${asset.name} (${(asset.size / 1048576).toFixed(1)} MB)${loginNote}`;
   row.append(label, meta, dl);
   return row;
 }
@@ -80,6 +81,14 @@ function modCard(mod) {
   const title = el("a", "mod-name", mod.name);
   title.href = mod.homepage;
   head.append(title, el("span", `kind kind-${mod.kind}`, mod.kind));
+  if (mod.private) {
+    const badge = el("span", "kind kind-private", "private");
+    badge.title =
+      "Private repository: download links only work while you are logged in to " +
+      "GitHub. If Amethyst cannot fetch the file, use the ⤓ link and " +
+      "Install mod from file…";
+    head.append(badge);
+  }
   card.append(head);
   card.appendChild(el("p", "mod-desc", mod.description || "(no description)"));
 
@@ -91,7 +100,7 @@ function modCard(mod) {
   const install = el("a", "install-btn");
   if (latest && preferredAsset(latest)) {
     install.href = modlUrl(mod.game_id, preferredAsset(latest).url);
-    install.title = `Install ${preferredAsset(latest).name} via Amethyst`;
+    install.title = `Install ${preferredAsset(latest).name} via Amethyst${mod.private ? " (private asset: GitHub login required in the downloader; prefer ⤓ + Install from file… if it fails)" : ""}`;
     install.textContent = `Install ${latest.tag}`;
   } else {
     install.classList.add("disabled");

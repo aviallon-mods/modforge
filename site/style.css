@@ -60,6 +60,12 @@ a:hover { text-decoration: underline; }
   color: var(--text);
 }
 .kind-tool { background: #3c2f4d; }
+.kind-private {
+  background: transparent;
+  border: 1px solid #d3543f;
+  color: #d3543f;
+  cursor: help;
+}
 
 .controls { display: flex; }
 .split {
