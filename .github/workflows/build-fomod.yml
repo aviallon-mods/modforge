@@ -79,7 +79,7 @@ on:
         default: ""
         type: string
       download_run_id:
-        description: "Workflow run id to download artifacts from (e.g. github.event.workflow_run.id); artifacts land in artifacts/<name>/, enabling the packaging-layer-over-upstream-CI pattern. NOTE: reusable-workflow permissions are INTERSECTED - the calling job must also grant `actions: read` or the download fails with 'Resource not accessible by integration'."
+        description: "Workflow run id to download artifacts from (e.g. github.event.workflow_run.id); artifacts land in artifacts/<name>/, enabling the packaging-layer-over-upstream-CI pattern. NOTE: the calling job must grant BOTH contents: write and actions: read (the download uses the REST artifact API)."
         required: false
         default: ""
         type: string
@@ -88,13 +88,14 @@ jobs:
   package:
     name: package + verify + release
     runs-on: ${{ inputs.runs_on }}
-    permissions:
-      contents: write
-      # actions:read is for actions/download-artifact with download_run_id:
-      # passing github-token routes it through the REST artifact API, which the
-      # default token cannot read without this grant (observed failure mode:
-      # 'Resource not accessible by integration').
-      actions: read
+    # No `permissions:` block here ON PURPOSE: a nested (reusable) job may only
+    # DOWNGRADE the caller's grants, so declaring `actions: read` here makes
+    # every caller that grants only `contents: write` fail workflow validation
+    # ('The nested job is requesting actions: read, but is only allowed
+    # actions: none' -> startup failure). Omitted, this job INHERITS the
+    # calling job's permissions: callers keep `permissions: contents: write`
+    # for the release attach, and callers that use download_run_id must ALSO
+    # grant `actions: read` (the REST artifact API needs it).
     steps:
       - uses: actions/checkout@v4
         with:
