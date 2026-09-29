@@ -105,3 +105,13 @@ kind = "mod"
 order = 130
 game_id = "skyrimspecialedition"
 description = "CTD / freeze / infinite-loading-screen diagnostics: captures dumps and produces a readable report (summary + evidence + checklist)."
+
+# Private repository (upstream has NO licence -> all rights reserved): pinned
+# by hand so the page shows the build without ORG_READ_TOKEN. Login-gated links.
+[[mods.builds]]
+tag = "v0.2.58"
+prerelease = false
+published_at = "2026-09-29T20:23:35Z"
+asset_name = "Tullius_ctd_loger-0.2.58-fomod.zip"
+asset_size = 227302770
+asset_url = "https://github.com/aviallon-mods/Tullius_ctd_loger/releases/download/v0.2.58/Tullius_ctd_loger-0.2.58-fomod.zip"
