@@ -72,6 +72,9 @@ def main() -> int:
     for name in sorted(set(by_repo) - known):
         try:
             repo_meta, _ = gh(f"/repos/{args.org}/{name}", token)
+            if repo_meta.get("private"):
+                print(f"::notice::{name}: private repository - omitted from the public index")
+                continue
             org_repos.append(repo_meta)
             known.add(name)
             print(f"::notice::{name}: absent from the org listing, fetched directly")
@@ -81,6 +84,13 @@ def main() -> int:
     mods = []
     for repo_meta in sorted(org_repos, key=lambda r: r["name"]):
         name = repo_meta["name"]
+        # Private repositories are omitted from the PUBLIC index: their asset
+        # URLs 404 for visitors, and some forks are private precisely because
+        # the upstream licence forbids redistribution (e.g. CBPC). Leaking
+        # their names/links on a public page is both broken and a licence risk.
+        if repo_meta.get("private"):
+            print(f"::notice::{name}: private repository - omitted from the public index")
+            continue
         cur = by_repo.get(name, {})
         builds = []
         try:
