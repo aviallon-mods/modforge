@@ -65,9 +65,18 @@ def main() -> int:
     org_repos = gh_paged(f"/orgs/{args.org}/repos", token)
     known = {r["name"] for r in org_repos}
 
-    missing = [r for r in by_repo if r not in known]
-    if missing:
-        print(f"::warning::mods.toml lists repos absent from {args.org}: {missing}")
+    # Curated repos must be present even if the org listing transiently misses
+    # one (observed: CBPC-1.7.2-concrt-fix absent from one run's listing while
+    # plainly present minutes later) -- fetch them directly instead of trusting
+    # the listing alone.
+    for name in sorted(set(by_repo) - known):
+        try:
+            repo_meta, _ = gh(f"/repos/{args.org}/{name}", token)
+            org_repos.append(repo_meta)
+            known.add(name)
+            print(f"::notice::{name}: absent from the org listing, fetched directly")
+        except Exception as e:
+            print(f"::warning::mods.toml lists repo {name} but it cannot be fetched: {e}")
 
     mods = []
     for repo_meta in sorted(org_repos, key=lambda r: r["name"]):
