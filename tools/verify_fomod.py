@@ -36,6 +36,72 @@ def localname(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+# ---------------------------------------------------------------------------
+# Minimal PE import-table reader (enough for DLL/EXE import names; no deps).
+
+def pe_imports(d: bytes) -> list:
+    import struct
+    e_lfanew = struct.unpack_from("<I", d, 0x3C)[0]
+    if d[e_lfanew:e_lfanew + 4] != b"PE\0\0":
+        raise ValueError("no PE signature")
+    coff = e_lfanew + 4
+    nsec = struct.unpack_from("<H", d, coff + 2)[0]
+    optsz = struct.unpack_from("<H", d, coff + 16)[0]
+    opt = coff + 20
+    magic = struct.unpack_from("<H", d, opt)[0]
+    dd = opt + (112 if magic == 0x20B else 96)
+    imp_rva = struct.unpack_from("<I", d, dd + 8)[0]
+    if imp_rva == 0:
+        return []
+    secs = []
+    for i in range(nsec):
+        s = opt + optsz + i * 40
+        vsz, va, rsz, raw = struct.unpack_from("<IIII", d, s + 8)
+        secs.append((va, max(vsz, rsz), raw))
+
+    def r2o(rva):
+        for va, sz, raw in secs:
+            if va <= rva < va + sz:
+                return raw + (rva - va)
+        raise ValueError(f"RVA {rva:#x} outside sections")
+
+    out, off = [], r2o(imp_rva)
+    while True:
+        desc = struct.unpack_from("<IIIII", d, off)
+        if desc[3] == 0:
+            break
+        out.append(d[r2o(desc[3]):].split(b"\0")[0].decode("ascii", "replace"))
+        off += 20
+    return out
+
+
+# Windows system DLLs an executable may import without shipping them.
+SYSTEM_DLLS = {
+    "kernel32.dll", "kernelbase.dll", "user32.dll", "gdi32.dll", "advapi32.dll",
+    "shell32.dll", "shlwapi.dll", "ole32.dll", "oleaut32.dll", "combase.dll",
+    "comdlg32.dll", "version.dll", "bcrypt.dll", "crypt32.dll", "secur32.dll",
+    "ws2_32.dll", "winhttp.dll", "wininet.dll", "winmm.dll", "dbghelp.dll",
+    "psapi.dll", "setupapi.dll", "powrprof.dll", "userenv.dll", "imm32.dll",
+    "d3d11.dll", "d3d12.dll", "d3d9.dll", "d3dcompiler_47.dll", "dxgi.dll",
+    "dwrite.dll", "dwmapi.dll", "opengl32.dll", "glu32.dll", "hid.dll",
+    "cfgmgr32.dll", "profapi.dll", "wtsapi32.dll", "wldap32.dll", "netapi32.dll",
+    "dnsapi.dll", "iphlpapi.dll", "cabinet.dll", "msimg32.dll", "usp10.dll",
+    "rpcrt4.dll", "ntdll.dll", "wintrust.dll", "imagehlp.dll", "dbcore.dll",
+    # Windows system DLLs observed in real shipped payloads (WinUI/.NET stacks):
+    "mscoree.dll", "shcore.dll", "d2d1.dll", "dcomp.dll", "dxcore.dll",
+    "bcp47langs.dll", "bcp47mrm.dll", "coremessaging.dll", "xmllite.dll",
+    "rometadata.dll", "urlmon.dll", "uxtheme.dll", "comctl32.dll",
+    "elscore.dll", "sspicli.dll", "propsys.dll", "twinapi.appcore.dll",
+    "inputservice.dll", "wldp.dll", "msasn1.dll", "ncrypt.dll",
+    "cryptsp.dll", "rsaenh.dll", "dpx.dll", "mscms.dll", "coloradapterclient.dll",
+}
+# VC runtime families are shipped by the VC++ Redistributable (a documented
+# runtime requirement in meta.ini), never by the mod itself.
+VC_RUNTIME_RE = re.compile(
+    r"^(msvcp|msvcr|vcruntime|concrt|vccorlib|ucrtbase|api-ms-win-crt|ext-ms-win-)",
+    re.I)
+
+
 def descendants(el, name):
     return [e for e in el.iter() if localname(e.tag) == name]
 
@@ -165,8 +231,39 @@ def check_meta_ini(ctx: Ctx):
                   f"installationFile={ctx.zip_path.name}, nexusRequirements: {req_n} entries")
 
 
+def check_import_coverage(ctx: Ctx):
+    """Every non-system DLL import of every shipped PE must be shipped too.
+
+    The defect this exists for: a plugin that BUILDS and whose zip passes every
+    shape check, but dies in game with SKSE's `couldn't load plugin
+    (00000007E)` = ERROR_MOD_NOT_FOUND because an import (spdlog.dll, fmt.dll
+    via a dynamic vcpkg triplet) was never packaged. Nothing else can see it:
+    byte-identity proves the zip copies its inputs, and off-game tests link
+    their own copies of the dependency."""
+    shipped = {n.split("/")[-1].lower() for n in ctx.entries}
+    problems, checked = [], 0
+    for name, blob in sorted(ctx.entries.items()):
+        if not name.lower().endswith((".dll", ".exe")) or not blob.startswith(b"MZ"):
+            continue
+        try:
+            imports = pe_imports(blob)
+        except Exception as e:
+            return False, f"{name}: PE import table unreadable: {e}"
+        for imp in imports:
+            low = imp.lower()
+            if (low in shipped or low in SYSTEM_DLLS
+                    or low.startswith("api-ms-win-") or VC_RUNTIME_RE.match(low)):
+                continue
+            problems.append(f"{name} imports {imp} (not shipped, not system/redist)")
+        checked += 1
+    if problems:
+        return False, "import coverage: " + "; ".join(problems)
+    return True, (f"import coverage: {checked} PE files, every non-system import "
+                  f"ships inside the zip (or is OS/VC-redist)")
+
+
 CHECKS = [check_zip_entries, check_xml_parse, check_moduleconfig_plugins,
-          check_payload_bytes, check_meta_ini]
+          check_payload_bytes, check_meta_ini, check_import_coverage]
 
 
 def main() -> int:
