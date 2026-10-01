@@ -117,9 +117,9 @@ description = "CTD / freeze / infinite-loading-screen diagnostics: captures dump
 # Private repository (upstream has NO licence -> all rights reserved): pinned
 # by hand so the page shows the build without ORG_READ_TOKEN. Login-gated links.
 [[mods.builds]]
-tag = "v0.2.58"
+tag = "v0.2.59"
 prerelease = false
-published_at = "2026-09-29T20:23:35Z"
-asset_name = "Tullius_ctd_loger-0.2.58-fomod.zip"
-asset_size = 227302770
-asset_url = "https://github.com/aviallon-mods/Tullius_ctd_loger/releases/download/v0.2.58/Tullius_ctd_loger-0.2.58-fomod.zip"
+published_at = "2026-10-01T14:55:37Z"
+asset_name = "Tullius_ctd_loger-0.2.59-fomod.zip"
+asset_size = 227720640
+asset_url = "https://github.com/aviallon-mods/Tullius_ctd_loger/releases/download/v0.2.59/Tullius_ctd_loger-0.2.59-fomod.zip"
