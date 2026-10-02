@@ -202,33 +202,51 @@ def check_meta_ini(ctx: Ctx):
     data = ctx.entries.get("meta.ini")
     if data is None:
         return False, "meta.ini: absent from the zip root"
-    parser = configparser.ConfigParser(strict=False)
-    parser.optionxform = str
+    parser = configparser.ConfigParser(strict=False, allow_no_value=True)
     try:
         parser.read_string(data.decode("utf-8"))
     except Exception as e:
         return False, f"meta.ini ({len(data)} B): does not parse: {e}"
     if "General" not in parser:
         return False, "meta.ini: no [General] section"
-    g = parser["General"]
+    g = {k.lower(): (v or "") for k, v in parser["General"].items()}
+
+    # The FULL managers' schema (the set Amethyst writes for a Nexus install):
+    # readers tolerate missing keys but then show the mod nameless/versionless
+    # (observed: modlist_data.py reads meta.version, meta.category_name, ...).
+    schema = [
+        "gamename", "modid", "fileid", "version", "author", "uploadedby",
+        "nexusname", "nexusfilename", "installationfile", "filesize",
+        "installed", "nexusurl", "description", "categoryid", "categoryname",
+        "filecategory", "endorsed", "latestfileid", "latestversion",
+        "hasupdate", "ignoreupdate", "ignoredversion", "missingrequirements",
+        "nexusrequirements", "ignoredrequirements", "fomod", "rootfolder",
+        "fromcollection",
+    ]
+    missing = [k for k in schema if k not in g]
     problems = []
-    for key in ("gameName", "version", "author", "nexusName", "nexusUrl",
-                "description", "installationFile", "fileCategory"):
+    if missing:
+        problems.append(f"{len(missing)} schema key(s) absent: {missing}")
+    for key in ("gamename", "version", "author", "nexusname", "nexusurl",
+                "description", "installationfile", "filecategory", "fomod"):
         if not g.get(key, "").strip():
             problems.append(f"{key} empty")
     version = g.get("version", "")
     if version and version not in ctx.zip_path.name:
         problems.append(f"version {version!r} does not appear in zip name {ctx.zip_path.name!r}")
-    if g.get("installationFile", "") != ctx.zip_path.name:
-        problems.append(f"installationFile={g.get('installationFile')!r} != {ctx.zip_path.name!r}")
-    reqs = g.get("nexusRequirements", "")
+    if g.get("installationfile", "") != ctx.zip_path.name:
+        problems.append(f"installationfile={g.get('installationfile')!r} != {ctx.zip_path.name!r}")
+    reqs = g.get("nexusrequirements", "")
     if reqs and not re.fullmatch(r"\d+:[^;]+(;\d+:[^;]+)*", reqs):
         problems.append(f"nexusRequirements not `modId:name(;modId:name)*`: {reqs!r}")
+    if g.get("filesize", "") and not g["filesize"].strip().isdigit():
+        problems.append(f"filesize not numeric: {g['filesize']!r}")
     if problems:
         return False, "meta.ini [General]: " + "; ".join(problems)
     req_n = len(reqs.split(";")) if reqs else 0
-    return True, (f"meta.ini [General]: 8 keys non-empty, version={version} matches zip name, "
-                  f"installationFile={ctx.zip_path.name}, nexusRequirements: {req_n} entries")
+    return True, (f"meta.ini [General]: all {len(schema)} schema keys present; "
+                  f"version={version}; installationfile={ctx.zip_path.name}; "
+                  f"filesize={g.get('filesize')}; nexusRequirements: {req_n} entries")
 
 
 def check_import_coverage(ctx: Ctx):

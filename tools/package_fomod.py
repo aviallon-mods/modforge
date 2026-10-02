@@ -98,38 +98,74 @@ def resolve_version(root: Path, spec: dict) -> str:
     fail(f"unknown version source {kind!r}")
 
 
-def stamp_meta_ini(root: Path, spec: dict, version: str, zip_name: str, entries: list) -> str:
+def stamp_meta_ini(root: Path, spec: dict, version: str, zip_name: str, entries: list,
+                   file_size: int | None = None) -> str:
     """Build the meta.ini text: the repo's committed meta.ini (accurate facts,
-    hand-curated) with the build-stamped keys overwritten."""
-    meta_path = root / "meta.ini"
+    hand-curated) completed into the FULL MO2/Amethyst [General] schema (28
+    keys, the shape the managers themselves write on install), with the
+    build-stamped keys overwritten. Keys are lowercase like the managers'
+    own output; readers are case-insensitive (configparser's default
+    optionxform lowercases on read, verified against Amethyst's read_meta).
+
+    The schema below is exactly the key set Amethyst writes for a Nexus
+    install (observed on Save Unbaker's meta.ini): missing keys are tolerated
+    by readers but leave the mod nameless/versionless in the UI."""
+    # (key, default) in the managers' canonical order.
+    schema = [
+        ("gamename", ""), ("modid", ""), ("fileid", ""), ("version", ""),
+        ("author", ""), ("uploadedby", ""), ("nexusname", ""),
+        ("nexusfilename", ""), ("installationfile", ""), ("filesize", ""),
+        ("installed", ""), ("nexusurl", ""), ("description", ""),
+        ("categoryid", ""), ("categoryname", ""), ("filecategory", ""),
+        ("endorsed", "false"), ("latestfileid", "0"), ("latestversion", ""),
+        ("hasupdate", "false"), ("ignoreupdate", "false"),
+        ("ignoredversion", ""), ("missingrequirements", ""),
+        ("nexusrequirements", ""), ("ignoredrequirements", ""),
+        ("fomod", "true"), ("rootfolder", "false"), ("fromcollection", ""),
+    ]
+
     parser = configparser.ConfigParser(strict=False)
-    parser.optionxform = str  # key case is significant (nexusRequirements etc.)
-    if meta_path.exists():
-        parser.read_string(meta_path.read_text())
+    parser.optionxform = str  # keep curated case while reading
+    if meta_path := (root / "meta.ini"):
+        if meta_path.exists():
+            parser.read_string(meta_path.read_text())
     if "General" not in parser:
         parser["General"] = {}
-
     g = parser["General"]
-    g["gameName"] = str(spec.get("game_name", g.get("gameName", "")))
+    # Curated keys may be written in any case (gameName vs gamename): fold the
+    # existing ones onto lowercase names before stamping.
+    folded = {k.lower(): v for k, v in g.items()}
+    g.clear()
+    g.update(folded)
+
+    g["gamename"] = str(spec.get("game_name", g.get("gamename", "")))
     g["version"] = version
     g["author"] = str(spec.get("author", g.get("author", "")))
-    g["nexusName"] = str(spec.get("nexus_name", g.get("nexusName", spec.get("name", ""))))
-    g["nexusUrl"] = str(spec.get("nexus_url", g.get("nexusUrl", "")))
+    g["uploadedby"] = str(spec.get("uploaded_by", g.get("uploadedby", g["author"])))
+    g["nexusname"] = str(spec.get("nexus_name", g.get("nexusname", spec.get("name", ""))))
+    g["nexusurl"] = str(spec.get("nexus_url", g.get("nexusurl", "")))
     g["description"] = str(spec.get("description", g.get("description", ""))).replace("\n", " ")
-    g["installationFile"] = zip_name
-    g["fileCategory"] = str(spec.get("file_category", g.get("fileCategory", "MAIN")))
+    g["installationfile"] = zip_name
+    if file_size is not None:
+        g["filesize"] = str(file_size)
+    g["filecategory"] = str(spec.get("file_category", g.get("filecategory", "MAIN")))
+    if spec.get("category_name") is not None:
+        g["categoryname"] = str(spec["category_name"])
+    if spec.get("category_id") is not None:
+        g["categoryid"] = str(spec["category_id"])
     if spec.get("requirements") is not None:
-        g["nexusRequirements"] = ";".join(str(r) for r in spec["requirements"])
-    g.setdefault("modid", "")
-    g.setdefault("fileid", "")
-    g["FOMOD"] = "True"
+        g["nexusrequirements"] = ";".join(str(r) for r in spec["requirements"])
+    g["fomod"] = "false" if spec.get("fomod", True) is False else "true"
+    g["rootfolder"] = "true" if spec.get("root_folder", False) else "false"
 
-    out = []
-    for section in parser.sections():
-        out.append(f"[{section}]")
-        for k, v in parser.items(section):
-            out.append(f"{k}={v}")
-        out.append("")
+    out = ["[General]"]
+    for key, default in schema:
+        out.append(f"{key} = {g.get(key, default) or ''}")
+    # Preserve any curated key outside the schema instead of dropping it.
+    for key, value in g.items():
+        if key.lower() not in {k for k, _ in schema}:
+            out.append(f"{key} = {value}")
+    out.append("")
     return "\n".join(out)
 
 
@@ -180,17 +216,28 @@ def build_one(spec_path: Path, outdir: Path) -> int:
 
     zpath = outdir / zip_name
 
-    meta_text = stamp_meta_ini(root, spec, version, zip_name, entries)
-    if not meta_text.startswith("[General]"):
-        fail("meta.ini does not start with [General]")
+    def write_zip(meta_text: str) -> None:
+        # Deterministic zip: fixed member order, fixed timestamps.
+        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
+            for src, dest in sorted(entries, key=lambda e: e[1]):
+                z.writestr(zipfile.ZipInfo(dest, date_time=(1980, 1, 1, 0, 0, 0)),
+                           Path(src).read_bytes())
+            z.writestr(zipfile.ZipInfo("meta.ini", date_time=(1980, 1, 1, 0, 0, 0)),
+                       meta_text)
 
-    # Deterministic zip: fixed member order, fixed timestamps.
-    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
-        for src, dest in sorted(entries, key=lambda e: e[1]):
-            z.writestr(zipfile.ZipInfo(dest, date_time=(1980, 1, 1, 0, 0, 0)),
-                       Path(src).read_bytes())
-        z.writestr(zipfile.ZipInfo("meta.ini", date_time=(1980, 1, 1, 0, 0, 0)),
-                   meta_text)
+    # Two-pass filesize: the managers' meta.ini schema carries the archive's
+    # own size, which is only known once the zip exists. Rebuild until the
+    # stamped size equals the real one (converges in 2-3 passes).
+    file_size = None
+    for _ in range(3):
+        meta_text = stamp_meta_ini(root, spec, version, zip_name, entries, file_size)
+        if not meta_text.startswith("[General]"):
+            fail("meta.ini does not start with [General]")
+        write_zip(meta_text)
+        size = zpath.stat().st_size
+        if file_size is not None and size == file_size:
+            break
+        file_size = size
 
     print(f"== packaged: {zpath}")
     h = hashlib.sha256(zpath.read_bytes()).hexdigest()
@@ -199,7 +246,6 @@ def build_one(spec_path: Path, outdir: Path) -> int:
         for i in z.infolist():
             print(f"   {i.file_size:>8}  {i.filename}")
     print(zpath)
-    return 0
     return 0
 
 
