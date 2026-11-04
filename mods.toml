@@ -103,6 +103,14 @@ repo = "Tullius_ctd_loger-upstream-fork"
 skip = true
 
 [[mods]]
+repo = "sovngarde-font"
+name = "Sovngarde Font Plus"
+kind = "mod"
+order = 140
+game_id = "skyrimspecialedition"
+description = "Sovngarde's interface font with the usual missing symbols added (em dash, ellipsis, bullet, superscripts, ...); patches the base mod's Scaleform movies and ships the desktop faces."
+
+[[mods]]
 repo = "modforge"
 skip = true
 
